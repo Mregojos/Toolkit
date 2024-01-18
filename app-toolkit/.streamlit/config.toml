@@ -1,5 +1,7 @@
 [client]
 showErrorDetails = false
+showSidebarNavigation = false
+caching = false
 
 [browser]
 gatherUsageStats = false
@@ -14,3 +16,9 @@ secondaryBackgroundColor = "lightblue"
 
 [ui]
 hideTopBar = true
+
+[logger]
+level = "error"
+
+# [server]
+# fileWatcherType = "none"

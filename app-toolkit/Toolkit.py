@@ -50,6 +50,13 @@ def connection():
     # Guest Limit
     cur.execute("CREATE TABLE IF NOT EXISTS toolkit_guest_chats(id serial PRIMARY KEY, name varchar, prompt varchar, output varchar, model varchar, time varchar, count_prompt int)")
     
+    # Total Prompts
+    # cur.execute("DROP TABLE total_prompts")
+    cur.execute("CREATE TABLE IF NOT EXISTS total_prompts(id serial PRIMARY KEY, name varchar, prompt varchar, output varchar, model varchar, time varchar, count_prompt int)")
+
+    # Counter
+    cur.execute("CREATE TABLE IF NOT EXISTS chat_view_counter(id serial PRIMARY KEY, view int, time varchar)")
+    
     con.commit()
     return con, cur
 
@@ -85,6 +92,10 @@ def main():
     prompt_error = "Sorry about that. Please prompt it again, prune the history, or change the model if the issue persists."
     button_streaming = False
     output = ""
+    sleep_time = 1
+    prompt_character_limit = 1
+    prompt_character_limit_text = f""":red[CHARACTER LIMIT]: Exceeds the prompt character limit of :blue[{prompt_character_limit}]""" 
+    current_model = ""
     
     apps = st.selectbox("Choose a tool", ["Text Only (One-Turn)", "Text Only (Multi-Turn)", "Code Analysis (One-Turn)", "GCP CLI Maker (One-Turn)"])
 
@@ -105,26 +116,32 @@ def main():
         with col_B:
             start = t.time()
             if user_prompt and button:
-                with st.spinner("Generating..."):
-                    response = mm_model.generate_content(user_prompt)
-                    # st.write(response.text)
-                    st.info("Output in markdown \n")
-                    st.markdown(response.text)
-                    # st.text(mm_chat.history)
-                    end = t.time()
-                    st.caption(f"Total Processing Time: {round(end - start, round_number)}")
+                if (len(user_prompt) >= prompt_character_limit) and GUEST:
+                    st.info(f"{prompt_character_limit_text}  \n\n Total Input Characters: {(len("".join(user_prompt.split())))}")
+                else:
+                    with st.spinner("Generating..."):
+                        response = mm_model.generate_content(user_prompt)
+                        # st.write(response.text)
+                        st.info("Output in markdown \n")
+                        st.markdown(response.text)
+                        # st.text(mm_chat.history)
+                        end = t.time()
+                        st.caption(f"Total Processing Time: {round(end - start, round_number)}")
             if user_prompt and button_streaming:
-                with st.spinner("Generating..."):
-                    response_ = ""
-                    response = mm_model.generate_content(user_prompt, stream=True)
-                    st.info("Output streaming... \n")
-                    for chunk in response:
-                        st.write(chunk.text)
-                        response_ = response_ + chunk.text 
-                    st.info("Output in markdown \n")
-                    st.markdown(response_)
-                    end = t.time()
-                    st.caption(f"Total Processing Time: {round(end - start, round_number)}")
+                if (len(user_prompt) >= prompt_character_limit) and GUEST:
+                    st.info(f"{prompt_character_limit_text}  \n\n Total Input Characters: {(len("".join(user_prompt.split())))}")
+                else:
+                    with st.spinner("Generating..."):
+                        response_ = ""
+                        response = mm_model.generate_content(user_prompt, stream=True)
+                        st.info("Output streaming... \n")
+                        for chunk in response:
+                            st.write(chunk.text)
+                            response_ = response_ + chunk.text 
+                        st.info("Output in markdown \n")
+                        st.markdown(response_)
+                        end = t.time()
+                        st.caption(f"Total Processing Time: {round(end - start, round_number)}")
             # if prompt and button_multi_turn:            
             #    pass
                 # st.caption(f"Total Processing Time: {end - start}")
@@ -148,44 +165,52 @@ def main():
                 st.rerun()
             prune = st.button(":red[Prune History]")
             if prune:
-                cur.execute("DROP TABLE toolkit_db")
-                st.info(f"Data was successfully deleted.")
+                cur.execute(f"""
+                            DELETE  
+                            FROM toolkit_db
+                            WHERE name='{input_name}'
+                            """)
                 con.commit()
+                st.info(f"Data was successfully deleted.")
+                t.sleep(sleep_time)
                 st.rerun()
 
 
         with col_B:
             start = t.time()
             if user_prompt and button:
-                prompt_history = ""
-                current_start_time = t.time() 
-                cur.execute(f"""
-                        SELECT * 
-                        FROM toolkit_db
-                        WHERE name='{input_name}'
-                        ORDER BY time ASC
-                        """)                    
-                try:
-                    with st.spinner("Generating..."):
-                        for id, name, prompt, output, model, time, start_time, end_time, image_detail, saved_image_data_base_string, total_input_characters, total_output_characters in cur.fetchall():
-                            prompt_history = prompt_history + f"\n\n User: {prompt}" + f"\n\n Model: {output}"
+                if (len(user_prompt) >= prompt_character_limit) and GUEST:
+                    st.info(f"{prompt_character_limit_text}  \n\n Total Input Characters: {(len("".join(user_prompt.split())))}")
+                else:
+                    prompt_history = ""
+                    current_start_time = t.time() 
+                    cur.execute(f"""
+                            SELECT * 
+                            FROM toolkit_db
+                            WHERE name='{input_name}'
+                            ORDER BY time ASC
+                            """)                    
+                    try:
+                        with st.spinner("Generating..."):
+                            for id, name, prompt, output, model, time, start_time, end_time, image_detail, saved_image_data_base_string, total_input_characters, total_output_characters in cur.fetchall():
+                                prompt_history = prompt_history + f"\n\n User: {prompt}" + f"\n\n Model: {output}"
 
-                        if prompt_history == "":
-                            response = mm_model.generate_content(user_prompt)
-                        elif prompt_history != "":
-                            prompt_history = prompt_history + f"\n\n User: {user_prompt}"
-                            response = mm_model.generate_content(prompt_history)
-                        output = response.text
-                except:
-                    output = prompt_error
+                            if prompt_history == "":
+                                response = mm_model.generate_content(user_prompt)
+                            elif prompt_history != "":
+                                prompt_history = prompt_history + f"\n\n User: {user_prompt}"
+                                response = mm_model.generate_content(prompt_history)
+                            output = response.text
+                    except:
+                        output = prompt_error
 
-                output_characters = len(output)
-                characters = len(user_prompt)
-                end_time = t.time() 
-                SQL = "INSERT INTO toolkit_db (name, prompt, output, model, time, start_time, end_time, total_input_characters, total_output_characters) VALUES(%s, %s, %s, %s, %s, %s, %s, %s, %s);"
-                data = (input_name, user_prompt, output, current_model, current_time, current_start_time, end_time, characters, output_characters)
-                cur.execute(SQL, data)
-                con.commit() 
+                    output_characters = len(output)
+                    characters = len(user_prompt)
+                    end_time = t.time() 
+                    SQL = "INSERT INTO toolkit_db (name, prompt, output, model, time, start_time, end_time, total_input_characters, total_output_characters) VALUES(%s, %s, %s, %s, %s, %s, %s, %s, %s);"
+                    data = (input_name, user_prompt, output, current_model, current_time, current_start_time, end_time, characters, output_characters)
+                    cur.execute(SQL, data)
+                    con.commit() 
 
 
             with st.expander("Past Conversations"):
@@ -225,7 +250,7 @@ def main():
     if apps == "Code Analysis (One-Turn)":
 
         info_sample_prompts = """
-            You can now start the conversation by prompting in the text bar. Enjoy. :smile: You can ask:
+            You can now start the conversation by prompting in the text bar. You can ask:
             * What is this code about?
             * How to optimize this code?
             * Add comments
@@ -236,46 +261,52 @@ def main():
 
         with col_A:
 
-            code_text = st.text_area("Code")
-            prompt_text = st.text_area("Prompt")
-            prompt = f"This is the code: \n\n {code_text} \n\n {prompt_text}"
+            user_code = st.text_area("Code")
+            text_prompt = st.text_area("Prompt")
+            user_prompt = f"This is the code: \n\n {user_code} \n\n {text_prompt}"
             button = st.button("Generate")
             button_stream = st.button("Generate (Stream)")
             details = st.toggle("Show details")
             if details:
-                st.info(f"""Total Code and Text Characters: {len(code_text + prompt_text)} 
-                        \n Code: {len(code_text)} 
-                        \n Text (Prompt): {len(prompt_text)}
+                st.info(f"""Total Code and Text Characters: {len(user_code + text_prompt)} 
+                        \n Code: {len(user_code)} 
+                        \n Text (Prompt): {len(text_prompt)}
                         """)
             reset = st.button(":blue[Reset]")
 
         with col_B:
             start = t.time()
             with st.spinner("Generating..."):
-                if prompt and button:
-                    response = mm_chat.send_message(prompt)
-                    st.info("Output in markdown \n")
-                    st.markdown(response.text)
-                    end = t.time()
-                    st.caption(f"Total Processing Time: {round(end - start, round_number)}")
-                if prompt and button_stream:
-                    response_ = ""
-                    response = mm_chat.send_message(prompt, stream=True)
-                    st.info("Output streaming... \n")
-                    for chunk in response:
-                        st.write(chunk.text)
-                        response_ = response_ + chunk.text 
-                    st.info("Output in markdown \n")
-                    st.markdown(response_)
-                    end = t.time()
-                    st.caption(f"Total Processing Time: {round(end - start, round_number)}")
+                if (user_code or text_prompt) and button:
+                    if (len(user_prompt) >= prompt_character_limit) and GUEST:
+                        st.info(f"{prompt_character_limit_text}  \n\n Total Input Characters: {(len("".join((user_code + text_prompt).split())))}")
+                    else:
+                        response = mm_chat.send_message(prompt)
+                        st.info("Output in markdown \n")
+                        st.markdown(response.text)
+                        end = t.time()
+                        st.caption(f"Total Processing Time: {round(end - start, round_number)}")
+                if (user_code or text_prompt) and button_stream:
+                    if (len(user_prompt) >= prompt_character_limit) and GUEST:
+                        st.info(f"{prompt_character_limit_text}  \n\n Total Input Characters: {(len("".join((user_code + text_prompt).split())))}")
+                    else:
+                        response_ = ""
+                        response = mm_chat.send_message(prompt, stream=True)
+                        st.info("Output streaming... \n")
+                        for chunk in response:
+                            st.write(chunk.text)
+                            response_ = response_ + chunk.text 
+                        st.info("Output in markdown \n")
+                        st.markdown(response_)
+                        end = t.time()
+                        st.caption(f"Total Processing Time: {round(end - start, round_number)}")
             if reset:
                 st.rerun()
 
     if apps == "GCP CLI Maker (One-Turn)":
 
         info_sample_prompts = """
-            You can now start the conversation by prompting in the text bar. Enjoy. :smile: You can ask:
+            You can now start the conversation by prompting in the text bar. You can ask:
             * Command line to List down GCP Services
             * Command line to create a bucket
             * Command line to create a compute engine
@@ -286,31 +317,37 @@ def main():
 
         with col_A:
 
-            prompt = st.text_area("Prompt")
+            user_prompt = st.text_area("Prompt")
             button = st.button("Generate")
-            button_stream = st.button("Generate (Stream)")
-            refresh = st.button("Refresh")
+            button_streaming = st.button("Generate (Stream)")
+            refresh = st.button(":blue[Reset]")
 
         with col_B:
             start = t.time()
-            if prompt and button:
-                response = mm_chat.send_message(f"Write only the Google Cloud Command Line in code format markdown: {prompt}")
-                st.info("Output in markdown \n")
-                st.markdown(response.text)
-                # st.text(mm_chat.history)
-                end = t.time()
-                #st.caption(f"Total Processing Time: {end - start}")
-            if prompt and button_stream:
-                response_ = ""
-                response = mm_chat.send_message(prompt, stream=True)
-                st.info("Output streaming... \n")
-                for chunk in response:
-                    st.write(chunk.text)
-                    response_ = response_ + chunk.text 
-                st.info("Output in markdown \n")
-                st.markdown(response_)
-                end = t.time()
-                # st.caption(f"Total Processing Time: {end - start}")
+            if user_prompt and button:
+                if (len(user_prompt) >= prompt_character_limit) and GUEST:
+                    st.info(f"{prompt_character_limit_text}  \n\n Total Input Characters: {(len("".join(user_prompt.split())))}")
+                else:
+                    response = mm_chat.send_message(f"Write only the Google Cloud Command Line in code format markdown: {user_prompt}")
+                    st.info("Output in markdown \n")
+                    st.markdown(response.text)
+                    # st.text(mm_chat.history)
+                    end = t.time()
+                    #st.caption(f"Total Processing Time: {end - start}")
+            if user_prompt and button_streaming:
+                if (len(user_prompt) >= prompt_character_limit) and GUEST:
+                    st.info(f"{prompt_character_limit_text}  \n\n Total Input Characters: {(len("".join(user_prompt.split())))}")
+                else:
+                    response_ = ""
+                    response = mm_chat.send_message(prompt, stream=True)
+                    st.info("Output streaming... \n")
+                    for chunk in response:
+                        st.write(chunk.text)
+                        response_ = response_ + chunk.text 
+                    st.info("Output in markdown \n")
+                    st.markdown(response_)
+                    end = t.time()
+                    # st.caption(f"Total Processing Time: {end - start}")
             if refresh:
                 st.rerun()
                     
@@ -322,7 +359,13 @@ def main():
         cur.execute(SQL, data)
         con.commit()
 
-                    
+    #---------------- Insert into a table (total_prompts) ----------------#
+    if button or button_streaming:
+        SQL = "INSERT INTO total_prompts (name, prompt, output, model, time, count_prompt) VALUES(%s, %s, %s, %s, %s, %s);"
+        data = (input_name, user_prompt, output, current_model, current_time, count_prompt)
+        cur.execute(SQL, data)
+        con.commit()
+
                     
 #----------Execution----------#
 if __name__ == '__main__':
@@ -338,7 +381,7 @@ if __name__ == '__main__':
         con, cur = connection()
 
         with st.sidebar:
-            st.header("AI-Powered Cloud Toolkit", divider="rainbow")
+            st.header(":star: AI-Powered Cloud Toolkit :toolbox:", divider="rainbow")
             login = st.checkbox("Login")
             guest = st.checkbox("Continue as a guest")
         
@@ -349,13 +392,91 @@ if __name__ == '__main__':
                 input_name = st.text_input("Username", input_name)
                 password = st.text_input("Password", type="password")
                 st.button("Login")
+                                        
             if password == ADMIN_PASSWORD:
                 GUEST = False
                 main()
         
+                # Prompt History
+                with st.sidebar:
+                    prompt_history = st.checkbox("Prompt History")
+                    if prompt_history:
+                        # Prune All
+                        prune_all = st.button(":red[Prune All]")
+
+                        # Guest Limit
+                        prune_multimodal_guest_chats = st.button(":red[Prune Guest Limit]")
+                        if prune_multimodal_guest_chats or prune_all:
+                            cur.execute("DROP TABLE toolkit_guest_chats")
+                            st.info(f"Guest Limit was successfully deleted.")
+                            con.commit()
+
+                        # All Guest and Admin DB
+                        prune_db = st.button(":red[Prune Guest and Admin DB]")
+                        if prune_db or prune_all:
+                            admin_DB = ["toolkit_db"]
+                            for DB in admin_DB:
+                                cur.execute(f"DROP TABLE {DB}")
+                            con.commit()
+                            st.info(f"Database was successfully deleted.")
+
+                        # Prune Total Prompts
+                        prune_total_prompts = st.button(":red[Prune Total Prompts DB]")
+                        if prune_total_prompts or prune_all:
+                            cur.execute("DROP TABLE total_prompts")
+                            st.info(f"Total Prompts DB was successfully deleted.")
+                            con.commit()
+
+                        # Prune Chat View Counter
+                        prune_chat_view_counter = st.button(":red[Prune Chat View Counter DB]")
+                        if prune_chat_view_counter or prune_all:
+                            cur.execute("DROP TABLE chat_view_counter")
+                            st.info(f"Chat View Counter DB was successfully deleted.")
+                            con.commit()
+                            st.rerun()
+                            
+                    counter = st.checkbox("Counter")
+                    if counter:
+                        st.header("Counter")
+                        st.caption("""
+                                    Count every request in this app.
+                                    """)
+                        st.subheader("",divider="rainbow")
+                        # Total views
+                        cur.execute("""
+                                    SELECT SUM(view) 
+                                    FROM chat_view_counter
+                                    """)
+                        st.write(f"#### Total views: **{cur.fetchone()[0]}**")
+                        # Current view
+                        time = t.strftime("Date: %Y-%m-%d | Time: %H:%M:%S UTC")
+                        st.write(f"Current: {time}")
+                        # Total views today
+                        time_date = time[0:15]
+                        cur.execute(f"""
+                                    SELECT SUM(view) 
+                                    FROM chat_view_counter
+                                    WHERE time LIKE '{time_date}%'
+                                    """)
+                        st.write(f"#### Total views today: **{cur.fetchone()[0]}**")
+                        st.divider()
+                        # Previous views
+                        views = st.checkbox("See Previous Views")
+                        if views:
+                            st.write("**Previous Views**")
+                            cur.execute("""
+                                        SELECT * 
+                                        FROM chat_view_counter
+                                        ORDER BY time DESC
+                                        """)
+                            for _, _, time in cur.fetchall():
+                                st.caption(f"{time}")
+                        
+        # Unchecked box
         if not login and not guest:
             st.info("Login or Continue as a guest to get started")
-            
+        
+        # Checked box
         if login and guest:
             with st.sidebar:
                 st.info("Please choose only one")
@@ -411,7 +532,14 @@ if __name__ == '__main__':
             #------------------ Guest limit --------------------------#
             if GUEST == True and total_count < LIMIT and input_name:
                 main()
-        
+
+        # Chat View Counter
+        time = t.strftime("Date: %Y-%m-%d | Time: %H:%M:%S UTC")
+        view = 1
+        SQL = "INSERT INTO chat_view_counter (view, time) VALUES(%s, %s);"
+        data = (view, time)
+        cur.execute(SQL, data)
+        con.commit()
     
 #----------Footer----------#
 #----------Sidebar Footer----------#

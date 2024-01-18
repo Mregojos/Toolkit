@@ -6,7 +6,7 @@ export APP_DEV_DB_INSTANCE_NAME="matt"
 
 # App Environments
 export VERSION="i"
-export APP_NAME="app-dev-ii-multimodal-$VERSION"
+export APP_NAME="app-toolkit-$VERSION"
 export DB_PASSWORD="password"
 export ADMIN_PASSWORD="password"
 export SPECIAL_NAME="guest"
