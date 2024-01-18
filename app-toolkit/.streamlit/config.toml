@@ -1,0 +1,16 @@
+[client]
+showErrorDetails = false
+
+[browser]
+gatherUsageStats = false
+
+[theme]
+# base = ""
+primaryColor = "purple"
+backgroundColor = "lightgray"
+secondaryBackgroundColor = "lightblue"
+# textColor = ""
+# font = ""
+
+[ui]
+hideTopBar = true
