@@ -1,10 +1,11 @@
 # Cloud Toolkit
+* Check out the deployed web app here: https://mattcloudtech.com/Toolkit
 
 ---
 ## Overview
-* Cloud Toolkit using the most capable Multimodal Model to date.
+* Cloud Toolkit with the power of Generative AI (Multimodal Model)
 
 ---
-Resources: 
+## Resources: 
 * Repository: https://github.com/mregojos/Toolkit
-* Multimodal Model Deployment Repository: https://github.com/mregojos/GCP-LLM-Deployment
+* Generative AI (Multimodal Model) Deployment Repository: https://github.com/mregojos/GCP-LLM-Deployment

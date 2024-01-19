@@ -93,7 +93,7 @@ def main():
     button_streaming = False
     output = ""
     sleep_time = 1
-    prompt_character_limit = 1
+    prompt_character_limit = 5000
     prompt_character_limit_text = f""":red[CHARACTER LIMIT]: Exceeds the prompt character limit of :blue[{prompt_character_limit}]""" 
     current_model = ""
     
